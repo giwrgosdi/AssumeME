@@ -1,11 +1,43 @@
 version: 2
 jobs:
-  build_package:
+  build_image:
     docker:
-      - image: giorgosdi/asm-0.2.5:latest
+      - image: docker:latest
     steps:
       - checkout
+      - run:
+          name: Set environment variables
+          command: |
+            echo "export TAG=$(cat setup.py | grep version | cut -d = -f 2 | cut -d \' -f 2 | cut -d \' -f 1)" >> $BASH_ENV
+            source $BASH_ENV
+      - run:
+          name: Build container image
+          command: |
+            source $BASH_ENV
+            ls
+            docker image build -t giorgosdi/asm:${TAG}-${CIRCLE_BRANCH} .
+  push_image:
+    docker:
+      - image: docker:latest
+    steps:
+      - checkout
+      - run:
+          name: Set environment variables
+          command: |
+            echo "export TAG=$(cat setup.py | grep version | cut -d = -f 2 | cut -d \' -f 2 | cut -d \' -f 1)" >> $BASH_ENV
+            source $BASH_ENV
+      - run:
+          name: Push image to dockerhub
+          command: |
+            source $BASH_ENV
+            docker image push giorgosdi/asm:${TAG}-${CIRCLE_BRANCH}
 
+
+  build_package:
+    docker:
+      - image: giorgosdi/asm
+    steps:
+      - checkout
       - run:
           name: create pip package
           command: |
@@ -16,13 +48,21 @@ jobs:
       - image: giorgosdi/asm-0.2.5:latest
     steps:
       - checkout
-
       - run:
           name: run tests
           command: |
             py.test
 workflows:
   version: 2
+  update_image:
+    jobs:
+      - run_tests
+      - build_image:
+          requires:
+            - run_tests
+      - push_image:
+          requires:
+            - build_image
   main:
     jobs:
       - run_tests
